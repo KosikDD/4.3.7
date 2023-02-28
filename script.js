@@ -1,118 +1,82 @@
-const searchWrapper = document.querySelector(".wrapper");
-const inputBox = searchWrapper.querySelector(".search-input");
-const suggBox = searchWrapper.querySelector(".search");
-let repos = document.querySelector(".repos");
+const input = document.querySelector(".input");
+const listBox = document.querySelector(".box");
+const infoBox = document.querySelector(".info-box");
 
-const debounce = (fn, debounceTime) => {
-  let debounce;
+let filteredArr = [];
 
+const debounce = function (cb, ms = 1000) {
+  let timer;
   return function () {
-    clearTimeout(debounce);
-    debounce = setTimeout(() => fn.apply(this, arguments), debounceTime);
+    clearTimeout(timer);
+    timer = setTimeout(() => {
+      cb.apply(this, arguments);
+    }, ms);
   };
 };
 
-const setListener = (element, type, handler) => {
-    if(element) {
-        return
-    }
-    element.addEventListener(type,handler);
-    return ()=> { 
-        element.removeEnemtListener(type, handler)
-    }
+const getRepos = async (e) => {
+  deleteAutoComplete();
+
+  let val = e.target.value;
+  if (val.length === 0) return;
+
+  const url = `https://api.github.com/search/repositories?q=${val}&per_page=5`;
+  const res = await fetch(url);
+  const data = await res.json();
+  filteredArr = data.items;
+
+  createAutoComlete();
+};
+
+function createAutoComlete() {
+  const ul = document.createElement("ul");
+  listBox.appendChild(ul);
+  filteredArr.forEach((el, _, arr) => {
+    const li = document.createElement("li");
+    li.textContent = el.name;
+    li.addEventListener("click", () => {
+      createRepoInfo(el);
+      deleteAutoComplete();
+      input.value = "";
+      arr.splice(0);
+    });
+    ul.appendChild(li);
+  });
 }
 
-function makeSearch() {
-  let li;
-  let div;
-  let closeBtn;
-
-  inputBox.addEventListener(
-    "input",
-    debounce(async (e) => {
-      e.stopPropagation();
-
-      let userData = e.target.value;
-      if (!userData) return suggBox.classList.remove("active");
-
-      let promise = await fetch("https://api.github.com/repositories");
-
-      let repositories = await promise.json();
-
-      let currentElem = repositories.filter((data) =>
-        data.name.startsWith(userData)
-      );
-
-      if(currentElem.length > 5) {
-        currentElem.length = 5
-      } else {
-        currentElem.length = currentElem.length
-      }
-
-      suggBox.innerHTML = "";
-
-      let listArr = [];
-
-      for (let i = 0; i < currentElem.length; i++) {
-
-        if (i < 5) {
-          li = document.createElement("li");
-          li.textContent = currentElem[i].name;
-          li.classList.add("search-item");
-          suggBox.appendChild(li);
-          listArr.push(li);
-        }
-        if (listArr.length > 0) {
-          suggBox.classList.add("active");
-        } else {
-          suggBox.classList.remove("active");
-        }
-
-        listArr[i].addEventListener("click", (event) => {
-          event.stopPropagation();
-
-          inputBox.value = "";
-          suggBox.classList.remove("active");
-          div = document.createElement("div");
-          div.classList.add("repo");
-          repos.appendChild(div);
-
-          closeBtn = document.createElement("button");
-          closeBtn.classList.add("btn-close");
-
-          div.appendChild(closeBtn);
-
-          div.onclick = (ev) => {
-            if (ev.target.className !== "btn-close") return;
-
-            let button = ev.target.closest(".repo");
-            button.remove();
-          };
-
-          let slash = currentElem[i]["full_name"].indexOf("/");
-
-          for (let t = 0; t < 3; t++) {
-            let text = document.createElement("div");
-            text.classList.add("text");
-            div.appendChild(text);
-
-            if (t === 0) {
-              text.textContent = `Name: ${currentElem[i].name}`;
-            }
-            if (t === 1) {
-              text.textContent = `Owner: ${currentElem[i]["full_name"].substr(
-                0,
-                slash
-              )}`;
-            }
-            if (t === 2) {
-              text.textContent = `Stars: ${currentElem[i].id}`;
-            }
-          }
-        });
-      }
-    }, 500)
-  );
+function deleteAutoComplete() {
+  const ulList = document.querySelector("ul");
+  if (ulList) ulList.remove();
 }
 
-makeSearch();
+function createRepoInfo(obj) {
+  let box = document.createElement("div");
+  box.classList.add("boxInfo");
+  let div = document.createElement("div");
+  box.append(div);
+  let name = document.createElement("p");
+  let login = document.createElement("p");
+  let stars = document.createElement("p");
+  name.textContent = `name: ${obj.name}`;
+  div.appendChild(name);
+  login.textContent = `owner: ${obj.owner.login}`;
+  div.appendChild(login);
+  stars.textContent = `stars: ${obj.stargazers_count}`;
+  div.appendChild(stars);
+  let btn = document.createElement("button");
+  btn.classList.add("deleteBtn");
+  btn.setAttribute("id", obj.id);
+  box.appendChild(btn);
+  btn.addEventListener("click", delBox);
+  infoBox.appendChild(box);
+}
+
+const delBox = (e) => {
+  let btn = e.target;
+  let box = btn.parentNode;
+  infoBox.removeChild(box);
+};
+
+const fetchData = debounce(getRepos, 500);
+
+input.addEventListener("input", fetchData);
